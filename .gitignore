@@ -1,0 +1,5 @@
+/.vscode/
+/backup/
+*.exe
+/build/
+/test/build/
