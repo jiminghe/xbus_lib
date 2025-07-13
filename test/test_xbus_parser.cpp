@@ -23,6 +23,9 @@ public:
         testEulerAnglesOnly();
         testLatLonOnly();
         testVelocityOnly();
+        testUtcTimeOnly();
+        testQuaternionOnly();
+        testBarometricPressureOnly();
         testInvalidMessage();
         
         std::cout << std::endl;
@@ -66,6 +69,36 @@ private:
             std::cout << "[PASS] " << testName << " (expected: " << expected << ", actual: " << actual << ")" << std::endl;
         } else {
             std::cout << "[FAIL] " << testName << " (expected: " << expected << ", actual: " << actual << ", diff: " << std::abs(expected - actual) << ")" << std::endl;
+        }
+    }
+
+    void assertUint32Equals(uint32_t expected, uint32_t actual, const std::string& testName) {
+        testsTotal++;
+        if (expected == actual) {
+            testsPassed++;
+            std::cout << "[PASS] " << testName << " (expected: " << expected << ", actual: " << actual << ")" << std::endl;
+        } else {
+            std::cout << "[FAIL] " << testName << " (expected: " << expected << ", actual: " << actual << ")" << std::endl;
+        }
+    }
+
+    void assertUint16Equals(uint16_t expected, uint16_t actual, const std::string& testName) {
+        testsTotal++;
+        if (expected == actual) {
+            testsPassed++;
+            std::cout << "[PASS] " << testName << " (expected: " << expected << ", actual: " << actual << ")" << std::endl;
+        } else {
+            std::cout << "[FAIL] " << testName << " (expected: " << expected << ", actual: " << actual << ")" << std::endl;
+        }
+    }
+
+    void assertUint8Equals(uint8_t expected, uint8_t actual, const std::string& testName) {
+        testsTotal++;
+        if (expected == actual) {
+            testsPassed++;
+            std::cout << "[PASS] " << testName << " (expected: " << static_cast<int>(expected) << ", actual: " << static_cast<int>(actual) << ")" << std::endl;
+        } else {
+            std::cout << "[FAIL] " << testName << " (expected: " << static_cast<int>(expected) << ", actual: " << static_cast<int>(actual) << ")" << std::endl;
         }
     }
 
@@ -286,6 +319,82 @@ private:
         assertDoubleEquals(0.3, sensorData.velocityXYZ.velZ, 0.000000001, "Velocity Z (0.3)");
     }
 
+    void testUtcTimeOnly() {
+        std::cout << std::endl << "--- Testing UTC Time Only ---" << std::endl;
+        
+        std::vector<uint8_t> payload;
+        // UTC Time test data: 10 10 0C 2C A8 4D 3C 07 E9 07 0D 09 15 22 00
+        payload.insert(payload.end(), {0x10, 0x10, 0x0C, 
+                                      0x2C, 0xA8, 0x4D, 0x3C,  // nanoseconds: 749227324
+                                      0x07, 0xE9,              // year: 2025
+                                      0x07,                    // month: 7
+                                      0x0D,                    // day: 13
+                                      0x09,                    // hour: 9
+                                      0x15,                    // minute: 21
+                                      0x22,                    // second: 34
+                                      0x00});                  // flags: 0
+        
+        std::vector<uint8_t> message = createMTData2Message(payload);
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message.data(), sensorData);
+        
+        assertTrue(success, "UTC Time parsing success");
+        assertTrue(sensorData.hasUtcTime, "Has UtcTime");
+        assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
+        
+        assertUint32Equals(749227324, sensorData.utcTime.nanoseconds, "UTC nanoseconds");
+        assertUint16Equals(2025, sensorData.utcTime.year, "UTC year");
+        assertUint8Equals(7, sensorData.utcTime.month, "UTC month");
+        assertUint8Equals(13, sensorData.utcTime.day, "UTC day");
+        assertUint8Equals(9, sensorData.utcTime.hour, "UTC hour");
+        assertUint8Equals(21, sensorData.utcTime.minute, "UTC minute");
+        assertUint8Equals(34, sensorData.utcTime.second, "UTC second");
+        assertUint8Equals(0, sensorData.utcTime.flags, "UTC flags");
+    }
+
+    void testQuaternionOnly() {
+        std::cout << std::endl << "--- Testing Quaternion Only ---" << std::endl;
+        
+        std::vector<uint8_t> payload;
+        // Quaternion test data: 20 10 10 3F 7F FE F3 BA 9C 8E C3 3A FD 24 45 3B AA 72 59
+        payload.insert(payload.end(), {0x20, 0x10, 0x10,
+                                      0x3F, 0x7F, 0xFE, 0xF3,  // q0: 0.9999840
+                                      0xBA, 0x9C, 0x8E, 0xC3,  // q1: -0.0011944
+                                      0x3A, 0xFD, 0x24, 0x45,  // q2: 0.0019313
+                                      0x3B, 0xAA, 0x72, 0x59}); // q3: 0.0052016
+        
+        std::vector<uint8_t> message = createMTData2Message(payload);
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message.data(), sensorData);
+        
+        assertTrue(success, "Quaternion parsing success");
+        assertTrue(sensorData.hasQuaternion, "Has Quaternion");
+        assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
+        
+        assertFloatEquals(0.9999840f, sensorData.quaternion.q0, 0.0000001f, "Quaternion q0");
+        assertFloatEquals(-0.0011944f, sensorData.quaternion.q1, 0.0000001f, "Quaternion q1");
+        assertFloatEquals(0.0019313f, sensorData.quaternion.q2, 0.0000001f, "Quaternion q2");
+        assertFloatEquals(0.0052016f, sensorData.quaternion.q3, 0.0000001f, "Quaternion q3");
+    }
+
+    void testBarometricPressureOnly() {
+        std::cout << std::endl << "--- Testing Barometric Pressure Only ---" << std::endl;
+        
+        std::vector<uint8_t> payload;
+        // Barometric pressure test data: 30 10 04 00 01 87 A4
+        payload.insert(payload.end(), {0x30, 0x10, 0x04,
+                                      0x00, 0x01, 0x87, 0xA4}); // pressure: 100260
+        
+        std::vector<uint8_t> message = createMTData2Message(payload);
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message.data(), sensorData);
+        
+        assertTrue(success, "Barometric pressure parsing success");
+        assertTrue(sensorData.hasBarometricPressure, "Has BarometricPressure");
+        assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
+        
+        assertUint32Equals(100260, sensorData.barometricPressure.pressure, "Barometric pressure value");
+    }
 
     void testInvalidMessage() {
         std::cout << std::endl << "--- Testing Invalid Message ---" << std::endl;

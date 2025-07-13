@@ -34,6 +34,36 @@ struct VelocityXYZ {
     VelocityXYZ(double x, double y, double z) : velX(x), velY(y), velZ(z) {}
 };
 
+struct Quaternion {
+    float q0;  // w component
+    float q1;  // x component
+    float q2;  // y component
+    float q3;  // z component
+    
+    Quaternion() : q0(1.0f), q1(0.0f), q2(0.0f), q3(0.0f) {}
+    Quaternion(float w, float x, float y, float z) : q0(w), q1(x), q2(y), q3(z) {}
+};
+
+struct UtcTime {
+    uint32_t nanoseconds;    // Fractional part (nanoseconds)
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+    uint8_t flags;
+    
+    UtcTime() : nanoseconds(0), year(0), month(0), day(0), hour(0), minute(0), second(0), flags(0) {}
+};
+
+struct BarometricPressure {
+    uint32_t pressure;  // Pressure in Pa (Pascal)
+    
+    BarometricPressure() : pressure(0) {}
+    BarometricPressure(uint32_t p) : pressure(p) {}
+};
+
 struct SensorData {
     bool hasPacketCounter = false;
     bool hasSampleTimeFine = false;
@@ -42,6 +72,9 @@ struct SensorData {
     bool hasLatLon = false;
     bool hasAltitudeEllipsoid = false;
     bool hasVelocityXYZ = false;
+    bool hasUtcTime = false;
+    bool hasQuaternion = false;
+    bool hasBarometricPressure = false;
     
     uint16_t packetCounter = 0;
     uint32_t sampleTimeFine = 0;
@@ -50,6 +83,9 @@ struct SensorData {
     LatLon latLon;
     double altitudeEllipsoid = 0.0;
     VelocityXYZ velocityXYZ;
+    UtcTime utcTime;
+    Quaternion quaternion;
+    BarometricPressure barometricPressure;
 };
 
 // XDI (Xsens Data Identifier) constants
@@ -65,6 +101,8 @@ namespace XDI {
     constexpr uint16_t ACCELERATION = 0x4020;
     constexpr uint16_t RATE_OF_TURN = 0x8020;
     constexpr uint16_t MAGNETIC_FIELD = 0xC020;
+    constexpr uint16_t UTC_TIME = 0x1010;
+    constexpr uint16_t BAROMETRIC_PRESSURE = 0x3010;
 }
 
 class XbusParser {
@@ -79,6 +117,9 @@ public:
     // Parse specific message types
     static std::string messageToString(const uint8_t* xbusData);
     static bool parseEulerAngles(const uint8_t* xbusData, EulerAngles& angles);
+    static bool parseQuaternion(const uint8_t* xbusData, Quaternion& quaternion);
+    static bool parseUtcTime(const uint8_t* xbusData, UtcTime& utcTime);
+    static bool parseBarometricPressure(const uint8_t* xbusData, BarometricPressure& pressure);
     static uint32_t parseDeviceId(const uint8_t* xbusData);
     static std::string parseFirmwareRevision(const uint8_t* xbusData);
     
@@ -89,6 +130,9 @@ public:
 private:
     static std::string getXDIName(uint16_t xdi);
     static std::string formatStatusWord(uint32_t statusWord);
+    static std::string formatUtcTime(const UtcTime& utcTime);
+    static std::string formatQuaternion(const Quaternion& quaternion);
+    static std::string formatBarometricPressure(const BarometricPressure& pressure);
 };
 
 #endif // XBUS_PARSER_H

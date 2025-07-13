@@ -214,6 +214,43 @@ bool XbusParser::parseMTData2(const uint8_t* xbusData, SensorData& sensorData) {
                 }
                 break;
                 
+            case XDI::UTC_TIME:
+                if (size == 12) { // 4 bytes ns + 2 bytes year + 1 byte each for month, day, hour, minute, second, flags
+                    sensorData.utcTime.nanoseconds = readUint32(payload, index);
+                    sensorData.utcTime.year = readUint16(payload, index);
+                    sensorData.utcTime.month = readUint8(payload, index);
+                    sensorData.utcTime.day = readUint8(payload, index);
+                    sensorData.utcTime.hour = readUint8(payload, index);
+                    sensorData.utcTime.minute = readUint8(payload, index);
+                    sensorData.utcTime.second = readUint8(payload, index);
+                    sensorData.utcTime.flags = readUint8(payload, index);
+                    sensorData.hasUtcTime = true;
+                } else {
+                    index += size; // Skip unknown size
+                }
+                break;
+                
+            case XDI::QUATERNION:
+                if (size == 16) { // 4 bytes each for q0, q1, q2, q3
+                    sensorData.quaternion.q0 = readFloat(payload, index);
+                    sensorData.quaternion.q1 = readFloat(payload, index);
+                    sensorData.quaternion.q2 = readFloat(payload, index);
+                    sensorData.quaternion.q3 = readFloat(payload, index);
+                    sensorData.hasQuaternion = true;
+                } else {
+                    index += size; // Skip unknown size
+                }
+                break;
+                
+            case XDI::BAROMETRIC_PRESSURE:
+                if (size == 4) { // 4 bytes for pressure
+                    sensorData.barometricPressure.pressure = readUint32(payload, index);
+                    sensorData.hasBarometricPressure = true;
+                } else {
+                    index += size; // Skip unknown size
+                }
+                break;
+                
             default:
                 // Unknown XDI, skip it
                 index += size;
@@ -236,11 +273,21 @@ std::string XbusParser::formatSensorData(const SensorData& data) {
         oss << "STF=" << data.sampleTimeFine;
     }
     
+    if (data.hasUtcTime) {
+        if (!oss.str().empty()) oss << ", ";
+        oss << "UTC=" << formatUtcTime(data.utcTime);
+    }
+    
     if (data.hasEulerAngles) {
         if (!oss.str().empty()) oss << ", ";
         oss << "Euler(R=" << std::fixed << std::setprecision(2) << data.eulerAngles.roll
             << "°, P=" << data.eulerAngles.pitch 
             << "°, Y=" << data.eulerAngles.yaw << "°)";
+    }
+    
+    if (data.hasQuaternion) {
+        if (!oss.str().empty()) oss << ", ";
+        oss << "Quat=" << formatQuaternion(data.quaternion);
     }
     
     if (data.hasLatLon) {
@@ -258,6 +305,11 @@ std::string XbusParser::formatSensorData(const SensorData& data) {
         if (!oss.str().empty()) oss << ", ";
         oss << "Vel(" << std::fixed << std::setprecision(4) << data.velocityXYZ.velX
             << ", " << data.velocityXYZ.velY << ", " << data.velocityXYZ.velZ << ")m/s";
+    }
+    
+    if (data.hasBarometricPressure) {
+        if (!oss.str().empty()) oss << ", ";
+        oss << "Baro=" << formatBarometricPressure(data.barometricPressure);
     }
     
     if (data.hasStatusWord) {
@@ -281,6 +333,8 @@ std::string XbusParser::getXDIName(uint16_t xdi) {
         case XDI::ACCELERATION: return "Acceleration";
         case XDI::RATE_OF_TURN: return "RateOfTurn";
         case XDI::MAGNETIC_FIELD: return "MagneticField";
+        case XDI::UTC_TIME: return "UtcTime";
+        case XDI::BAROMETRIC_PRESSURE: return "BarometricPressure";
         default: return "Unknown";
     }
 }
@@ -297,10 +351,67 @@ std::string XbusParser::formatStatusWord(uint32_t statusWord) {
     return oss.str();
 }
 
+std::string XbusParser::formatUtcTime(const UtcTime& utcTime) {
+    std::ostringstream oss;
+    oss << std::setfill('0') << std::setw(4) << utcTime.year << "-"
+        << std::setw(2) << static_cast<int>(utcTime.month) << "-"
+        << std::setw(2) << static_cast<int>(utcTime.day) << " "
+        << std::setw(2) << static_cast<int>(utcTime.hour) << ":"
+        << std::setw(2) << static_cast<int>(utcTime.minute) << ":"
+        << std::setw(2) << static_cast<int>(utcTime.second) << "."
+        << std::setw(9) << utcTime.nanoseconds;
+    
+    if (utcTime.flags != 0) {
+        oss << " [F:" << std::hex << std::uppercase << std::setfill('0') << std::setw(2) << static_cast<int>(utcTime.flags) << "]";
+    }
+    
+    return oss.str();
+}
+
+std::string XbusParser::formatQuaternion(const Quaternion& quaternion) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6) << "(" << quaternion.q0 << ", " 
+        << quaternion.q1 << ", " << quaternion.q2 << ", " << quaternion.q3 << ")";
+    return oss.str();
+}
+
+std::string XbusParser::formatBarometricPressure(const BarometricPressure& pressure) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << (pressure.pressure / 100.0) << " hPa";
+    return oss.str();
+}
+
 bool XbusParser::parseEulerAngles(const uint8_t* xbusData, EulerAngles& angles) {
     SensorData sensorData;
     if (parseMTData2(xbusData, sensorData) && sensorData.hasEulerAngles) {
         angles = sensorData.eulerAngles;
+        return true;
+    }
+    return false;
+}
+
+bool XbusParser::parseQuaternion(const uint8_t* xbusData, Quaternion& quaternion) {
+    SensorData sensorData;
+    if (parseMTData2(xbusData, sensorData) && sensorData.hasQuaternion) {
+        quaternion = sensorData.quaternion;
+        return true;
+    }
+    return false;
+}
+
+bool XbusParser::parseUtcTime(const uint8_t* xbusData, UtcTime& utcTime) {
+    SensorData sensorData;
+    if (parseMTData2(xbusData, sensorData) && sensorData.hasUtcTime) {
+        utcTime = sensorData.utcTime;
+        return true;
+    }
+    return false;
+}
+
+bool XbusParser::parseBarometricPressure(const uint8_t* xbusData, BarometricPressure& pressure) {
+    SensorData sensorData;
+    if (parseMTData2(xbusData, sensorData) && sensorData.hasBarometricPressure) {
+        pressure = sensorData.barometricPressure;
         return true;
     }
     return false;
