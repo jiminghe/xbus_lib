@@ -272,6 +272,39 @@ bool XbusParser::parseMTData2(const uint8_t* xbusData, SensorData& sensorData) {
                 }
                 break;
                 
+            case XDI::ACCELERATION:
+                if (size == 12) { // 4 bytes each for X, Y, Z
+                    sensorData.acceleration.accX = readFloat(payload, index);
+                    sensorData.acceleration.accY = readFloat(payload, index);
+                    sensorData.acceleration.accZ = readFloat(payload, index);
+                    sensorData.hasAcceleration = true;
+                } else {
+                    index += size; // Skip unknown size
+                }
+                break;
+                
+            case XDI::RATE_OF_TURN:
+                if (size == 12) { // 4 bytes each for X, Y, Z
+                    sensorData.rateOfTurn.gyrX = readFloat(payload, index);
+                    sensorData.rateOfTurn.gyrY = readFloat(payload, index);
+                    sensorData.rateOfTurn.gyrZ = readFloat(payload, index);
+                    sensorData.hasRateOfTurn = true;
+                } else {
+                    index += size; // Skip unknown size
+                }
+                break;
+                
+            case XDI::MAGNETIC_FIELD:
+                if (size == 12) { // 4 bytes each for X, Y, Z
+                    sensorData.magneticField.magX = readFloat(payload, index);
+                    sensorData.magneticField.magY = readFloat(payload, index);
+                    sensorData.magneticField.magZ = readFloat(payload, index);
+                    sensorData.hasMagneticField = true;
+                } else {
+                    index += size; // Skip unknown size
+                }
+                break;
+                
             default:
                 // Unknown XDI, skip it
                 index += size;
@@ -326,6 +359,33 @@ bool XbusParser::formatSensorData(const SensorData& data, char* output, size_t m
         char quatStr[64];
         if (formatQuaternion(data.quaternion, quatStr, sizeof(quatStr))) {
             snprintf(tempBuffer, sizeof(tempBuffer), "%sQuat=%s", hasData ? ", " : "", quatStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+            hasData = true;
+        }
+    }
+    
+    if (data.hasAcceleration) {
+        char accStr[64];
+        if (formatAcceleration(data.acceleration, accStr, sizeof(accStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sAcc=%s", hasData ? ", " : "", accStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+            hasData = true;
+        }
+    }
+    
+    if (data.hasRateOfTurn) {
+        char rotStr[64];
+        if (formatRateOfTurn(data.rateOfTurn, rotStr, sizeof(rotStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sRoT=%s", hasData ? ", " : "", rotStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+            hasData = true;
+        }
+    }
+    
+    if (data.hasMagneticField) {
+        char magStr[64];
+        if (formatMagneticField(data.magneticField, magStr, sizeof(magStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sMag=%s", hasData ? ", " : "", magStr);
             if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
             hasData = true;
         }
@@ -452,6 +512,45 @@ bool XbusParser::formatBarometricPressure(const BarometricPressure& pressure, ch
     return true;
 }
 
+bool XbusParser::formatAcceleration(const AccelerationXYZ& acceleration, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    snprintf(output, maxLen, "(%.6f, %.6f, %.6f)m/s²", 
+            static_cast<double>(acceleration.accX),
+            static_cast<double>(acceleration.accY),
+            static_cast<double>(acceleration.accZ));
+    
+    return true;
+}
+
+bool XbusParser::formatRateOfTurn(const RateOfTurnXYZ& rateOfTurn, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    snprintf(output, maxLen, "(%.6f, %.6f, %.6f)rad/s", 
+            static_cast<double>(rateOfTurn.gyrX),
+            static_cast<double>(rateOfTurn.gyrY),
+            static_cast<double>(rateOfTurn.gyrZ));
+    
+    return true;
+}
+
+bool XbusParser::formatMagneticField(const MagneticFieldXYZ& magneticField, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    snprintf(output, maxLen, "(%.6f, %.6f, %.6f)a.u.", 
+            static_cast<double>(magneticField.magX),
+            static_cast<double>(magneticField.magY),
+            static_cast<double>(magneticField.magZ));
+    
+    return true;
+}
+
 bool XbusParser::parseEulerAngles(const uint8_t* xbusData, EulerAngles& angles) {
     SensorData sensorData;
     if (parseMTData2(xbusData, sensorData) && sensorData.hasEulerAngles) {
@@ -483,6 +582,33 @@ bool XbusParser::parseBarometricPressure(const uint8_t* xbusData, BarometricPres
     SensorData sensorData;
     if (parseMTData2(xbusData, sensorData) && sensorData.hasBarometricPressure) {
         pressure = sensorData.barometricPressure;
+        return true;
+    }
+    return false;
+}
+
+bool XbusParser::parseAcceleration(const uint8_t* xbusData, AccelerationXYZ& acceleration) {
+    SensorData sensorData;
+    if (parseMTData2(xbusData, sensorData) && sensorData.hasAcceleration) {
+        acceleration = sensorData.acceleration;
+        return true;
+    }
+    return false;
+}
+
+bool XbusParser::parseRateOfTurn(const uint8_t* xbusData, RateOfTurnXYZ& rateOfTurn) {
+    SensorData sensorData;
+    if (parseMTData2(xbusData, sensorData) && sensorData.hasRateOfTurn) {
+        rateOfTurn = sensorData.rateOfTurn;
+        return true;
+    }
+    return false;
+}
+
+bool XbusParser::parseMagneticField(const uint8_t* xbusData, MagneticFieldXYZ& magneticField) {
+    SensorData sensorData;
+    if (parseMTData2(xbusData, sensorData) && sensorData.hasMagneticField) {
+        magneticField = sensorData.magneticField;
         return true;
     }
     return false;

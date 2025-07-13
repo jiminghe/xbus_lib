@@ -29,6 +29,12 @@ public:
         testUtcTimeOnly();
         testQuaternionOnly();
         testBarometricPressureOnly();
+        
+        testAccelerationOnly();
+        testRateOfTurnOnly();
+        testMagneticFieldOnly();
+        testAllIMUDataTogether();
+        
         testInvalidMessage();
         testMessageToString();
         testFormatSensorData();
@@ -42,8 +48,7 @@ public:
         } else {
             printf("Some tests FAILED!\n");
         }
-    }
-    
+    }    
 private:
     void assertTrue(bool condition, const char* testName) {
         testsTotal++;
@@ -459,6 +464,194 @@ private:
         assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
         
         assertUint32Equals(100260, sensorData.barometricPressure.pressure, "Barometric pressure value");
+    }
+
+    void testAccelerationOnly() {
+        printf("\n--- Testing Acceleration Only ---\n");
+        
+        uint8_t payload[MAX_PAYLOAD_SIZE];
+        size_t payloadIndex = 0;
+        
+        // Acceleration test data: 40 20 0C BC DF C3 F0 BD 32 77 7B 41 1C CD 9B
+        // Values: X=-0.0273151, Y=-0.0435710, Z=9.8001966
+        uint8_t accData[] = {0x40, 0x20, 0x0C,
+                            0xBC, 0xDF, 0xC3, 0xF0,  // accX: -0.0273151
+                            0xBD, 0x32, 0x77, 0x7B,  // accY: -0.0435710
+                            0x41, 0x1C, 0xCD, 0x9B}; // accZ: 9.8001966
+        memcpy(&payload[payloadIndex], accData, sizeof(accData));
+        payloadIndex += sizeof(accData);
+        
+        uint8_t message[MAX_MESSAGE_SIZE];
+        size_t messageSize = createMTData2Message(payload, payloadIndex, message);
+        
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message, sensorData);
+        
+        assertTrue(success, "Acceleration parsing success");
+        assertTrue(sensorData.hasAcceleration, "Has Acceleration");
+        assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
+        assertTrue(!sensorData.hasRateOfTurn, "No RateOfTurn");
+        assertTrue(!sensorData.hasMagneticField, "No MagneticField");
+        
+        assertFloatEquals(-0.0273151f, sensorData.acceleration.accX, 0.0000001f, "Acceleration X");
+        assertFloatEquals(-0.0435710f, sensorData.acceleration.accY, 0.0000001f, "Acceleration Y");
+        assertFloatEquals(9.8001966f, sensorData.acceleration.accZ, 0.0000001f, "Acceleration Z");
+        
+        // Test individual parse function
+        AccelerationXYZ acceleration;
+        bool parseSuccess = XbusParser::parseAcceleration(message, acceleration);
+        assertTrue(parseSuccess, "parseAcceleration function success");
+        assertFloatEquals(-0.0273151f, acceleration.accX, 0.0000001f, "parseAcceleration X");
+        assertFloatEquals(-0.0435710f, acceleration.accY, 0.0000001f, "parseAcceleration Y");
+        assertFloatEquals(9.8001966f, acceleration.accZ, 0.0000001f, "parseAcceleration Z");
+    }
+    
+    void testRateOfTurnOnly() {
+        printf("\n--- Testing Rate of Turn Only ---\n");
+        
+        uint8_t payload[MAX_PAYLOAD_SIZE];
+        size_t payloadIndex = 0;
+        
+        // Rate of turn test data: 80 20 0C 3B EE B2 40 3B 29 49 81 3B AC D3 C0
+        // Values: X=0.0072844, Y=0.0025831, Z=0.0052743
+        uint8_t rotData[] = {0x80, 0x20, 0x0C,
+                            0x3B, 0xEE, 0xB2, 0x40,  // gyrX: 0.0072844
+                            0x3B, 0x29, 0x49, 0x81,  // gyrY: 0.0025831
+                            0x3B, 0xAC, 0xD3, 0xC0}; // gyrZ: 0.0052743
+        memcpy(&payload[payloadIndex], rotData, sizeof(rotData));
+        payloadIndex += sizeof(rotData);
+        
+        uint8_t message[MAX_MESSAGE_SIZE];
+        size_t messageSize = createMTData2Message(payload, payloadIndex, message);
+        
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message, sensorData);
+        
+        assertTrue(success, "Rate of turn parsing success");
+        assertTrue(sensorData.hasRateOfTurn, "Has RateOfTurn");
+        assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
+        assertTrue(!sensorData.hasAcceleration, "No Acceleration");
+        assertTrue(!sensorData.hasMagneticField, "No MagneticField");
+        
+        assertFloatEquals(0.0072844f, sensorData.rateOfTurn.gyrX, 0.0000001f, "Rate of turn X");
+        assertFloatEquals(0.0025831f, sensorData.rateOfTurn.gyrY, 0.0000001f, "Rate of turn Y");
+        assertFloatEquals(0.0052743f, sensorData.rateOfTurn.gyrZ, 0.0000001f, "Rate of turn Z");
+        
+        // Test individual parse function
+        RateOfTurnXYZ rateOfTurn;
+        bool parseSuccess = XbusParser::parseRateOfTurn(message, rateOfTurn);
+        assertTrue(parseSuccess, "parseRateOfTurn function success");
+        assertFloatEquals(0.0072844f, rateOfTurn.gyrX, 0.0000001f, "parseRateOfTurn X");
+        assertFloatEquals(0.0025831f, rateOfTurn.gyrY, 0.0000001f, "parseRateOfTurn Y");
+        assertFloatEquals(0.0052743f, rateOfTurn.gyrZ, 0.0000001f, "parseRateOfTurn Z");
+    }
+    
+    void testMagneticFieldOnly() {
+        printf("\n--- Testing Magnetic Field Only ---\n");
+        
+        uint8_t payload[MAX_PAYLOAD_SIZE];
+        size_t payloadIndex = 0;
+        
+        // Magnetic field test data: C0 20 0C BE BB F8 D0 BE D3 69 60 BF 4D B3 B4
+        // Values: X=-0.3671327, Y=-0.4129133, Z=-0.8035233
+        uint8_t magData[] = {0xC0, 0x20, 0x0C,
+                            0xBE, 0xBB, 0xF8, 0xD0,  // magX: -0.3671327
+                            0xBE, 0xD3, 0x69, 0x60,  // magY: -0.4129133
+                            0xBF, 0x4D, 0xB3, 0xB4}; // magZ: -0.8035233
+        memcpy(&payload[payloadIndex], magData, sizeof(magData));
+        payloadIndex += sizeof(magData);
+        
+        uint8_t message[MAX_MESSAGE_SIZE];
+        size_t messageSize = createMTData2Message(payload, payloadIndex, message);
+        
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message, sensorData);
+        
+        assertTrue(success, "Magnetic field parsing success");
+        assertTrue(sensorData.hasMagneticField, "Has MagneticField");
+        assertTrue(!sensorData.hasEulerAngles, "No EulerAngles");
+        assertTrue(!sensorData.hasAcceleration, "No Acceleration");
+        assertTrue(!sensorData.hasRateOfTurn, "No RateOfTurn");
+        
+        assertFloatEquals(-0.3671327f, sensorData.magneticField.magX, 0.0000001f, "Magnetic field X");
+        assertFloatEquals(-0.4129133f, sensorData.magneticField.magY, 0.0000001f, "Magnetic field Y");
+        assertFloatEquals(-0.8035233f, sensorData.magneticField.magZ, 0.0000001f, "Magnetic field Z");
+        
+        // Test individual parse function
+        MagneticFieldXYZ magneticField;
+        bool parseSuccess = XbusParser::parseMagneticField(message, magneticField);
+        assertTrue(parseSuccess, "parseMagneticField function success");
+        assertFloatEquals(-0.3671327f, magneticField.magX, 0.0000001f, "parseMagneticField X");
+        assertFloatEquals(-0.4129133f, magneticField.magY, 0.0000001f, "parseMagneticField Y");
+        assertFloatEquals(-0.8035233f, magneticField.magZ, 0.0000001f, "parseMagneticField Z");
+    }
+    
+    void testAllIMUDataTogether() {
+        printf("\n--- Testing All IMU Data Together ---\n");
+        
+        uint8_t payload[MAX_PAYLOAD_SIZE];
+        size_t payloadIndex = 0;
+        
+        // Acceleration data: 40 20 0C BC DF C3 F0 BD 32 77 7B 41 1C CD 9B
+        uint8_t accData[] = {0x40, 0x20, 0x0C,
+                            0xBC, 0xDF, 0xC3, 0xF0,  // accX: -0.0273151
+                            0xBD, 0x32, 0x77, 0x7B,  // accY: -0.0435710
+                            0x41, 0x1C, 0xCD, 0x9B}; // accZ: 9.8001966
+        memcpy(&payload[payloadIndex], accData, sizeof(accData));
+        payloadIndex += sizeof(accData);
+        
+        // Rate of turn data: 80 20 0C 3B EE B2 40 3B 29 49 81 3B AC D3 C0
+        uint8_t rotData[] = {0x80, 0x20, 0x0C,
+                            0x3B, 0xEE, 0xB2, 0x40,  // gyrX: 0.0072844
+                            0x3B, 0x29, 0x49, 0x81,  // gyrY: 0.0025831
+                            0x3B, 0xAC, 0xD3, 0xC0}; // gyrZ: 0.0052743
+        memcpy(&payload[payloadIndex], rotData, sizeof(rotData));
+        payloadIndex += sizeof(rotData);
+        
+        // Magnetic field data: C0 20 0C BE BB F8 D0 BE D3 69 60 BF 4D B3 B4
+        uint8_t magData[] = {0xC0, 0x20, 0x0C,
+                            0xBE, 0xBB, 0xF8, 0xD0,  // magX: -0.3671327
+                            0xBE, 0xD3, 0x69, 0x60,  // magY: -0.4129133
+                            0xBF, 0x4D, 0xB3, 0xB4}; // magZ: -0.8035233
+        memcpy(&payload[payloadIndex], magData, sizeof(magData));
+        payloadIndex += sizeof(magData);
+        
+        uint8_t message[MAX_MESSAGE_SIZE];
+        size_t messageSize = createMTData2Message(payload, payloadIndex, message);
+        
+        SensorData sensorData;
+        bool success = XbusParser::parseMTData2(message, sensorData);
+        
+        assertTrue(success, "All IMU data parsing success");
+        assertTrue(sensorData.hasAcceleration, "Has Acceleration");
+        assertTrue(sensorData.hasRateOfTurn, "Has RateOfTurn");
+        assertTrue(sensorData.hasMagneticField, "Has MagneticField");
+        
+        // Verify acceleration values
+        assertFloatEquals(-0.0273151f, sensorData.acceleration.accX, 0.0000001f, "Combined Acceleration X");
+        assertFloatEquals(-0.0435710f, sensorData.acceleration.accY, 0.0000001f, "Combined Acceleration Y");
+        assertFloatEquals(9.8001966f, sensorData.acceleration.accZ, 0.0000001f, "Combined Acceleration Z");
+        
+        // Verify rate of turn values
+        assertFloatEquals(0.0072844f, sensorData.rateOfTurn.gyrX, 0.0000001f, "Combined Rate of turn X");
+        assertFloatEquals(0.0025831f, sensorData.rateOfTurn.gyrY, 0.0000001f, "Combined Rate of turn Y");
+        assertFloatEquals(0.0052743f, sensorData.rateOfTurn.gyrZ, 0.0000001f, "Combined Rate of turn Z");
+        
+        // Verify magnetic field values
+        assertFloatEquals(-0.3671327f, sensorData.magneticField.magX, 0.0000001f, "Combined Magnetic field X");
+        assertFloatEquals(-0.4129133f, sensorData.magneticField.magY, 0.0000001f, "Combined Magnetic field Y");
+        assertFloatEquals(-0.8035233f, sensorData.magneticField.magZ, 0.0000001f, "Combined Magnetic field Z");
+        
+        // Test formatted output includes all IMU data
+        char output[MAX_SENSOR_DATA_STRING_LEN];
+        bool formatSuccess = XbusParser::formatSensorData(sensorData, output, sizeof(output));
+        assertTrue(formatSuccess, "IMU data formatting success");
+        printf("Combined IMU data: %s\n", output);
+        
+        // Check that the formatted string contains acceleration, rate of turn, and magnetic field data
+        assertTrue(strstr(output, "Acc=") != nullptr, "Formatted output contains acceleration");
+        assertTrue(strstr(output, "RoT=") != nullptr, "Formatted output contains rate of turn");
+        assertTrue(strstr(output, "Mag=") != nullptr, "Formatted output contains magnetic field");
     }
 
     void testInvalidMessage() {

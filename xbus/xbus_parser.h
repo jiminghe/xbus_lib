@@ -69,6 +69,34 @@ struct BarometricPressure {
     BarometricPressure(uint32_t p) : pressure(p) {}
 };
 
+// New data structures for the missing types
+struct AccelerationXYZ {
+    float accX;  // m/s²
+    float accY;  // m/s²
+    float accZ;  // m/s²
+    
+    AccelerationXYZ() : accX(0.0f), accY(0.0f), accZ(0.0f) {}
+    AccelerationXYZ(float x, float y, float z) : accX(x), accY(y), accZ(z) {}
+};
+
+struct RateOfTurnXYZ {
+    float gyrX;  // rad/s
+    float gyrY;  // rad/s
+    float gyrZ;  // rad/s
+    
+    RateOfTurnXYZ() : gyrX(0.0f), gyrY(0.0f), gyrZ(0.0f) {}
+    RateOfTurnXYZ(float x, float y, float z) : gyrX(x), gyrY(y), gyrZ(z) {}
+};
+
+struct MagneticFieldXYZ {
+    float magX;  // arbitrary unit
+    float magY;  // arbitrary unit
+    float magZ;  // arbitrary unit
+    
+    MagneticFieldXYZ() : magX(0.0f), magY(0.0f), magZ(0.0f) {}
+    MagneticFieldXYZ(float x, float y, float z) : magX(x), magY(y), magZ(z) {}
+};
+
 struct SensorData {
     bool hasPacketCounter = false;
     bool hasSampleTimeFine = false;
@@ -80,6 +108,9 @@ struct SensorData {
     bool hasUtcTime = false;
     bool hasQuaternion = false;
     bool hasBarometricPressure = false;
+    bool hasAcceleration = false;
+    bool hasRateOfTurn = false;
+    bool hasMagneticField = false;
     
     uint16_t packetCounter = 0;
     uint32_t sampleTimeFine = 0;
@@ -91,6 +122,9 @@ struct SensorData {
     UtcTime utcTime;
     Quaternion quaternion;
     BarometricPressure barometricPressure;
+    AccelerationXYZ acceleration;
+    RateOfTurnXYZ rateOfTurn;
+    MagneticFieldXYZ magneticField;
 };
 
 // XDI (Xsens Data Identifier) constants
@@ -125,6 +159,9 @@ public:
     static bool parseQuaternion(const uint8_t* xbusData, Quaternion& quaternion);
     static bool parseUtcTime(const uint8_t* xbusData, UtcTime& utcTime);
     static bool parseBarometricPressure(const uint8_t* xbusData, BarometricPressure& pressure);
+    static bool parseAcceleration(const uint8_t* xbusData, AccelerationXYZ& acceleration);
+    static bool parseRateOfTurn(const uint8_t* xbusData, RateOfTurnXYZ& rateOfTurn);
+    static bool parseMagneticField(const uint8_t* xbusData, MagneticFieldXYZ& magneticField);
     static uint32_t parseDeviceId(const uint8_t* xbusData);
     static bool parseFirmwareRevision(const uint8_t* xbusData, char* output, size_t maxLen);
     
@@ -138,6 +175,9 @@ private:
     static bool formatUtcTime(const UtcTime& utcTime, char* output, size_t maxLen);
     static bool formatQuaternion(const Quaternion& quaternion, char* output, size_t maxLen);
     static bool formatBarometricPressure(const BarometricPressure& pressure, char* output, size_t maxLen);
+    static bool formatAcceleration(const AccelerationXYZ& acceleration, char* output, size_t maxLen);
+    static bool formatRateOfTurn(const RateOfTurnXYZ& rateOfTurn, char* output, size_t maxLen);
+    static bool formatMagneticField(const MagneticFieldXYZ& magneticField, char* output, size_t maxLen);
     
     // Helper functions for safe string operations
     static bool appendToBuffer(char* buffer, size_t maxLen, const char* str);
