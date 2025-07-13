@@ -3,9 +3,14 @@
 
 #include "xbus.h"
 #include "xbus_message_id.h"
-#include <string>
 #include <cstdint>
-#include <vector>
+#include <cstring>  // For memcpy
+
+// Maximum string lengths for output buffers
+static constexpr size_t MAX_MESSAGE_STRING_LEN = 256;
+static constexpr size_t MAX_SENSOR_DATA_STRING_LEN = 512;
+static constexpr size_t MAX_TIMESTAMP_STRING_LEN = 32;
+static constexpr size_t MAX_FIRMWARE_STRING_LEN = 16;
 
 // Data structure definitions
 struct EulerAngles {
@@ -114,25 +119,32 @@ public:
     static float readFloat(const uint8_t* data, int& index);
     static double readFP1632(const uint8_t* data, int& index);  // For FP16.32 format
     
-    // Parse specific message types
-    static std::string messageToString(const uint8_t* xbusData);
+    // Parse specific message types - using fixed-size output buffers
+    static bool messageToString(const uint8_t* xbusData, char* output, size_t maxLen);
     static bool parseEulerAngles(const uint8_t* xbusData, EulerAngles& angles);
     static bool parseQuaternion(const uint8_t* xbusData, Quaternion& quaternion);
     static bool parseUtcTime(const uint8_t* xbusData, UtcTime& utcTime);
     static bool parseBarometricPressure(const uint8_t* xbusData, BarometricPressure& pressure);
     static uint32_t parseDeviceId(const uint8_t* xbusData);
-    static std::string parseFirmwareRevision(const uint8_t* xbusData);
+    static bool parseFirmwareRevision(const uint8_t* xbusData, char* output, size_t maxLen);
     
     // Enhanced MTData2 parsing
     static bool parseMTData2(const uint8_t* xbusData, SensorData& sensorData);
-    static std::string formatSensorData(const SensorData& data);
+    static bool formatSensorData(const SensorData& data, char* output, size_t maxLen);
     
 private:
-    static std::string getXDIName(uint16_t xdi);
-    static std::string formatStatusWord(uint32_t statusWord);
-    static std::string formatUtcTime(const UtcTime& utcTime);
-    static std::string formatQuaternion(const Quaternion& quaternion);
-    static std::string formatBarometricPressure(const BarometricPressure& pressure);
+    static const char* getXDIName(uint16_t xdi);
+    static bool formatStatusWord(uint32_t statusWord, char* output, size_t maxLen);
+    static bool formatUtcTime(const UtcTime& utcTime, char* output, size_t maxLen);
+    static bool formatQuaternion(const Quaternion& quaternion, char* output, size_t maxLen);
+    static bool formatBarometricPressure(const BarometricPressure& pressure, char* output, size_t maxLen);
+    
+    // Helper functions for safe string operations
+    static bool appendToBuffer(char* buffer, size_t maxLen, const char* str);
+    static bool appendFloatToBuffer(char* buffer, size_t maxLen, float value, int precision);
+    static bool appendDoubleToBuffer(char* buffer, size_t maxLen, double value, int precision);
+    static bool appendIntToBuffer(char* buffer, size_t maxLen, int value);
+    static bool appendHexToBuffer(char* buffer, size_t maxLen, uint32_t value, int width);
 };
 
 #endif // XBUS_PARSER_H

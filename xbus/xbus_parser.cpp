@@ -1,8 +1,7 @@
-// Enhanced xbus_parser.cpp
+// PX4-compliant xbus_parser.cpp
 #include "xbus_parser.h"
-#include <sstream>
-#include <iomanip>
 #include <cstring>
+#include <cstdio>  // For snprintf
 
 uint8_t XbusParser::readUint8(const uint8_t* data, int& index) {
     return data[index++];
@@ -54,64 +53,86 @@ double XbusParser::readFP1632(const uint8_t* data, int& index) {
     return result;
 }
 
-std::string XbusParser::messageToString(const uint8_t* xbusData) {
+bool XbusParser::messageToString(const uint8_t* xbusData, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    output[0] = '\0'; // Initialize buffer
+    
     if (!Xbus::checkPreamble(xbusData)) {
-        return "Invalid xbus message";
+        strncpy(output, "Invalid xbus message", maxLen - 1);
+        output[maxLen - 1] = '\0';
+        return false;
     }
 
     uint8_t messageId = Xbus::getMessageId(xbusData);
     int index = 4;
-    std::ostringstream oss;
+    char tempBuffer[64];
 
     switch (messageId) {
         case XMID_Wakeup:
-            return "XMID_Wakeup";
+            strncpy(output, "XMID_Wakeup", maxLen - 1);
+            break;
 
         case XMID_DeviceId: {
             uint32_t deviceId = readUint32(xbusData, index);
-            oss << "XMID_DeviceId: 0x" << std::hex << std::uppercase << std::setfill('0') << std::setw(8) << deviceId;
-            return oss.str();
+            snprintf(output, maxLen, "XMID_DeviceId: 0x%08X", deviceId);
+            break;
         }
 
         case XMID_GotoConfigAck:
-            return "XMID_GotoConfigAck";
+            strncpy(output, "XMID_GotoConfigAck", maxLen - 1);
+            break;
 
         case XMID_GotoMeasurementAck:
-            return "XMID_GotoMeasurementAck";
+            strncpy(output, "XMID_GotoMeasurementAck", maxLen - 1);
+            break;
 
         case XMID_MtData2: {
             // Use enhanced parsing for MTData2
             SensorData sensorData;
             if (parseMTData2(xbusData, sensorData)) {
-                return "XMID_MtData2: " + formatSensorData(sensorData);
+                char sensorDataStr[MAX_SENSOR_DATA_STRING_LEN];
+                if (formatSensorData(sensorData, sensorDataStr, sizeof(sensorDataStr))) {
+                    snprintf(output, maxLen, "XMID_MtData2: %s", sensorDataStr);
+                } else {
+                    strncpy(output, "XMID_MtData2: Format error", maxLen - 1);
+                }
             } else {
-                return "XMID_MtData2: Failed to parse";
+                strncpy(output, "XMID_MtData2: Failed to parse", maxLen - 1);
             }
+            break;
         }
 
         case XMID_FirmwareRevision: {
             uint8_t major = readUint8(xbusData, index);
             uint8_t minor = readUint8(xbusData, index);
             uint8_t patch = readUint8(xbusData, index);
-            oss << "Firmware revision: " << static_cast<int>(major) << "." 
-                << static_cast<int>(minor) << "." << static_cast<int>(patch);
-            return oss.str();
+            snprintf(output, maxLen, "Firmware revision: %d.%d.%d", 
+                    static_cast<int>(major), static_cast<int>(minor), static_cast<int>(patch));
+            break;
         }
 
         case XMID_GotoBootLoaderAck:
-            return "XMID_GotoBootLoaderAck";
+            strncpy(output, "XMID_GotoBootLoaderAck", maxLen - 1);
+            break;
 
         case XMID_FirmwareUpdate:
-            return "XMID_FirmwareUpdate";
+            strncpy(output, "XMID_FirmwareUpdate", maxLen - 1);
+            break;
 
         case XMID_ResetAck:
-            return "XMID_ResetAck";
+            strncpy(output, "XMID_ResetAck", maxLen - 1);
+            break;
 
         default:
-            oss << "Unhandled xbus message: MessageId = 0x" << std::hex << std::uppercase 
-                << std::setfill('0') << std::setw(2) << static_cast<int>(messageId);
-            return oss.str();
+            snprintf(output, maxLen, "Unhandled xbus message: MessageId = 0x%02X", static_cast<int>(messageId));
+            break;
     }
+    
+    output[maxLen - 1] = '\0'; // Ensure null termination
+    return true;
 }
 
 bool XbusParser::parseMTData2(const uint8_t* xbusData, SensorData& sensorData) {
@@ -261,66 +282,98 @@ bool XbusParser::parseMTData2(const uint8_t* xbusData, SensorData& sensorData) {
     return true;
 }
 
-std::string XbusParser::formatSensorData(const SensorData& data) {
-    std::ostringstream oss;
+bool XbusParser::formatSensorData(const SensorData& data, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    output[0] = '\0'; // Initialize buffer
+    char tempBuffer[128];
+    bool hasData = false;
     
     if (data.hasPacketCounter) {
-        oss << "PC=" << data.packetCounter;
+        snprintf(tempBuffer, sizeof(tempBuffer), "PC=%u", data.packetCounter);
+        if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        hasData = true;
     }
     
     if (data.hasSampleTimeFine) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "STF=" << data.sampleTimeFine;
+        snprintf(tempBuffer, sizeof(tempBuffer), "%sSTF=%u", hasData ? ", " : "", data.sampleTimeFine);
+        if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        hasData = true;
     }
     
     if (data.hasUtcTime) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "UTC=" << formatUtcTime(data.utcTime);
+        char timeStr[MAX_TIMESTAMP_STRING_LEN];
+        if (formatUtcTime(data.utcTime, timeStr, sizeof(timeStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sUTC=%s", hasData ? ", " : "", timeStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+            hasData = true;
+        }
     }
     
     if (data.hasEulerAngles) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "Euler(R=" << std::fixed << std::setprecision(2) << data.eulerAngles.roll
-            << "°, P=" << data.eulerAngles.pitch 
-            << "°, Y=" << data.eulerAngles.yaw << "°)";
+        snprintf(tempBuffer, sizeof(tempBuffer), "%sEuler(R=%.2f°, P=%.2f°, Y=%.2f°)", 
+                hasData ? ", " : "",
+                static_cast<double>(data.eulerAngles.roll),
+                static_cast<double>(data.eulerAngles.pitch),
+                static_cast<double>(data.eulerAngles.yaw));
+        if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        hasData = true;
     }
     
     if (data.hasQuaternion) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "Quat=" << formatQuaternion(data.quaternion);
+        char quatStr[64];
+        if (formatQuaternion(data.quaternion, quatStr, sizeof(quatStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sQuat=%s", hasData ? ", " : "", quatStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+            hasData = true;
+        }
     }
     
     if (data.hasLatLon) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "LatLon(" << std::fixed << std::setprecision(8) << data.latLon.latitude
-            << ", " << data.latLon.longitude << ")";
+        snprintf(tempBuffer, sizeof(tempBuffer), "%sLatLon(%.8f, %.8f)", 
+                hasData ? ", " : "", data.latLon.latitude, data.latLon.longitude);
+        if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        hasData = true;
     }
     
     if (data.hasAltitudeEllipsoid) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "Alt=" << std::fixed << std::setprecision(3) << data.altitudeEllipsoid << "m";
+        snprintf(tempBuffer, sizeof(tempBuffer), "%sAlt=%.3fm", 
+                hasData ? ", " : "", data.altitudeEllipsoid);
+        if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        hasData = true;
     }
     
     if (data.hasVelocityXYZ) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "Vel(" << std::fixed << std::setprecision(4) << data.velocityXYZ.velX
-            << ", " << data.velocityXYZ.velY << ", " << data.velocityXYZ.velZ << ")m/s";
+        snprintf(tempBuffer, sizeof(tempBuffer), "%sVel(%.4f, %.4f, %.4f)m/s", 
+                hasData ? ", " : "",
+                data.velocityXYZ.velX, data.velocityXYZ.velY, data.velocityXYZ.velZ);
+        if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        hasData = true;
     }
     
     if (data.hasBarometricPressure) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "Baro=" << formatBarometricPressure(data.barometricPressure);
+        char baroStr[32];
+        if (formatBarometricPressure(data.barometricPressure, baroStr, sizeof(baroStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sBaro=%s", hasData ? ", " : "", baroStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+            hasData = true;
+        }
     }
     
     if (data.hasStatusWord) {
-        if (!oss.str().empty()) oss << ", ";
-        oss << "Status=" << formatStatusWord(data.statusWord);
+        char statusStr[64];
+        if (formatStatusWord(data.statusWord, statusStr, sizeof(statusStr))) {
+            snprintf(tempBuffer, sizeof(tempBuffer), "%sStatus=%s", hasData ? ", " : "", statusStr);
+            if (!appendToBuffer(output, maxLen, tempBuffer)) return false;
+        }
     }
     
-    return oss.str();
+    return true;
 }
 
-std::string XbusParser::getXDIName(uint16_t xdi) {
+const char* XbusParser::getXDIName(uint16_t xdi) {
     switch (xdi) {
         case XDI::PACKET_COUNTER: return "PacketCounter";
         case XDI::SAMPLE_TIME_FINE: return "SampleTimeFine";
@@ -339,46 +392,64 @@ std::string XbusParser::getXDIName(uint16_t xdi) {
     }
 }
 
-std::string XbusParser::formatStatusWord(uint32_t statusWord) {
-    std::ostringstream oss;
-    oss << "0x" << std::hex << std::uppercase << std::setfill('0') << std::setw(8) << statusWord;
-    
-    // Add some basic status interpretation
-    if (statusWord & 0x0001) oss << " [SelfTest]";
-    if (statusWord & 0x0002) oss << " [FilterValid]";
-    if (statusWord & 0x0004) oss << " [GNSSFix]";
-    
-    return oss.str();
-}
-
-std::string XbusParser::formatUtcTime(const UtcTime& utcTime) {
-    std::ostringstream oss;
-    oss << std::setfill('0') << std::setw(4) << utcTime.year << "-"
-        << std::setw(2) << static_cast<int>(utcTime.month) << "-"
-        << std::setw(2) << static_cast<int>(utcTime.day) << " "
-        << std::setw(2) << static_cast<int>(utcTime.hour) << ":"
-        << std::setw(2) << static_cast<int>(utcTime.minute) << ":"
-        << std::setw(2) << static_cast<int>(utcTime.second) << "."
-        << std::setw(9) << utcTime.nanoseconds;
-    
-    if (utcTime.flags != 0) {
-        oss << " [F:" << std::hex << std::uppercase << std::setfill('0') << std::setw(2) << static_cast<int>(utcTime.flags) << "]";
+bool XbusParser::formatStatusWord(uint32_t statusWord, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
     }
     
-    return oss.str();
+    snprintf(output, maxLen, "0x%08X", statusWord);
+    
+    // Add some basic status interpretation
+    char flags[64] = "";
+    if (statusWord & 0x0001) strcat(flags, " [SelfTest]");
+    if (statusWord & 0x0002) strcat(flags, " [FilterValid]");
+    if (statusWord & 0x0004) strcat(flags, " [GNSSFix]");
+    
+    if (strlen(flags) > 0 && strlen(output) + strlen(flags) < maxLen - 1) {
+        strcat(output, flags);
+    }
+    
+    return true;
 }
 
-std::string XbusParser::formatQuaternion(const Quaternion& quaternion) {
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(6) << "(" << quaternion.q0 << ", " 
-        << quaternion.q1 << ", " << quaternion.q2 << ", " << quaternion.q3 << ")";
-    return oss.str();
+bool XbusParser::formatUtcTime(const UtcTime& utcTime, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    snprintf(output, maxLen, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
+            utcTime.year, utcTime.month, utcTime.day,
+            utcTime.hour, utcTime.minute, utcTime.second,
+            utcTime.nanoseconds);
+    
+    if (utcTime.flags != 0 && strlen(output) < maxLen - 10) {
+        char flagStr[10];
+        snprintf(flagStr, sizeof(flagStr), " [F:%02X]", utcTime.flags);
+        strcat(output, flagStr);
+    }
+    
+    return true;
 }
 
-std::string XbusParser::formatBarometricPressure(const BarometricPressure& pressure) {
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2) << (pressure.pressure / 100.0) << " hPa";
-    return oss.str();
+bool XbusParser::formatQuaternion(const Quaternion& quaternion, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    snprintf(output, maxLen, "(%.6f, %.6f, %.6f, %.6f)", 
+            static_cast<double>(quaternion.q0), static_cast<double>(quaternion.q1),
+            static_cast<double>(quaternion.q2), static_cast<double>(quaternion.q3));
+    
+    return true;
+}
+
+bool XbusParser::formatBarometricPressure(const BarometricPressure& pressure, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
+    snprintf(output, maxLen, "%.2f hPa", static_cast<double>(pressure.pressure) / 100.0);
+    return true;
 }
 
 bool XbusParser::parseEulerAngles(const uint8_t* xbusData, EulerAngles& angles) {
@@ -431,14 +502,18 @@ uint32_t XbusParser::parseDeviceId(const uint8_t* xbusData) {
     return readUint32(xbusData, index);
 }
 
-std::string XbusParser::parseFirmwareRevision(const uint8_t* xbusData) {
+bool XbusParser::parseFirmwareRevision(const uint8_t* xbusData, char* output, size_t maxLen) {
+    if (!output || maxLen == 0) {
+        return false;
+    }
+    
     if (!Xbus::checkPreamble(xbusData)) {
-        return "";
+        return false;
     }
 
     uint8_t messageId = Xbus::getMessageId(xbusData);
     if (messageId != XMID_FirmwareRevision) {
-        return "";
+        return false;
     }
 
     int index = 4;
@@ -446,7 +521,69 @@ std::string XbusParser::parseFirmwareRevision(const uint8_t* xbusData) {
     uint8_t minor = readUint8(xbusData, index);
     uint8_t patch = readUint8(xbusData, index);
     
-    std::ostringstream oss;
-    oss << static_cast<int>(major) << "." << static_cast<int>(minor) << "." << static_cast<int>(patch);
-    return oss.str();
+    snprintf(output, maxLen, "%d.%d.%d", 
+            static_cast<int>(major), static_cast<int>(minor), static_cast<int>(patch));
+    
+    return true;
+}
+
+// Helper functions for safe string operations
+bool XbusParser::appendToBuffer(char* buffer, size_t maxLen, const char* str) {
+    if (!buffer || !str || maxLen == 0) {
+        return false;
+    }
+    
+    size_t currentLen = strlen(buffer);
+    size_t strLen = strlen(str);
+    
+    if (currentLen + strLen >= maxLen) {
+        return false; // Not enough space
+    }
+    
+    strcat(buffer, str);
+    return true;
+}
+
+bool XbusParser::appendFloatToBuffer(char* buffer, size_t maxLen, float value, int precision) {
+    if (!buffer || maxLen == 0) {
+        return false;
+    }
+    
+    char tempStr[32];
+    snprintf(tempStr, sizeof(tempStr), "%.*f", precision, static_cast<double>(value));
+    
+    return appendToBuffer(buffer, maxLen, tempStr);
+}
+
+bool XbusParser::appendDoubleToBuffer(char* buffer, size_t maxLen, double value, int precision) {
+    if (!buffer || maxLen == 0) {
+        return false;
+    }
+    
+    char tempStr[32];
+    snprintf(tempStr, sizeof(tempStr), "%.*f", precision, value);
+    
+    return appendToBuffer(buffer, maxLen, tempStr);
+}
+
+bool XbusParser::appendIntToBuffer(char* buffer, size_t maxLen, int value) {
+    if (!buffer || maxLen == 0) {
+        return false;
+    }
+    
+    char tempStr[16];
+    snprintf(tempStr, sizeof(tempStr), "%d", value);
+    
+    return appendToBuffer(buffer, maxLen, tempStr);
+}
+
+bool XbusParser::appendHexToBuffer(char* buffer, size_t maxLen, uint32_t value, int width) {
+    if (!buffer || maxLen == 0) {
+        return false;
+    }
+    
+    char tempStr[16];
+    snprintf(tempStr, sizeof(tempStr), "0x%0*X", width, value);
+    
+    return appendToBuffer(buffer, maxLen, tempStr);
 }
