@@ -97,6 +97,13 @@ struct MagneticFieldXYZ {
     MagneticFieldXYZ(float x, float y, float z) : magX(x), magY(y), magZ(z) {}
 };
 
+struct Temperature {
+    float temperature;  // °C
+    
+    Temperature() : temperature(0.0f) {}
+    Temperature(float temp) : temperature(temp) {}
+};
+
 struct SensorData {
     bool hasPacketCounter = false;
     bool hasSampleTimeFine = false;
@@ -111,6 +118,7 @@ struct SensorData {
     bool hasAcceleration = false;
     bool hasRateOfTurn = false;
     bool hasMagneticField = false;
+    bool hasTemperature = false;
     
     uint16_t packetCounter = 0;
     uint32_t sampleTimeFine = 0;
@@ -125,6 +133,7 @@ struct SensorData {
     AccelerationXYZ acceleration;
     RateOfTurnXYZ rateOfTurn;
     MagneticFieldXYZ magneticField;
+    Temperature temperature;
 };
 
 // XDI (Xsens Data Identifier) constants
@@ -142,6 +151,7 @@ namespace XDI {
     constexpr uint16_t MAGNETIC_FIELD = 0xC020;
     constexpr uint16_t UTC_TIME = 0x1010;
     constexpr uint16_t BAROMETRIC_PRESSURE = 0x3010;
+    constexpr uint16_t TEMPERATURE = 0x0810;
 }
 
 class XbusParser {
@@ -162,6 +172,7 @@ public:
     static bool parseAcceleration(const uint8_t* xbusData, AccelerationXYZ& acceleration);
     static bool parseRateOfTurn(const uint8_t* xbusData, RateOfTurnXYZ& rateOfTurn);
     static bool parseMagneticField(const uint8_t* xbusData, MagneticFieldXYZ& magneticField);
+    static bool parseTemperature(const uint8_t* xbusData, Temperature& temperature);
     static uint32_t parseDeviceId(const uint8_t* xbusData);
     static bool parseFirmwareRevision(const uint8_t* xbusData, char* output, size_t maxLen);
     
@@ -178,6 +189,7 @@ private:
     static bool formatAcceleration(const AccelerationXYZ& acceleration, char* output, size_t maxLen);
     static bool formatRateOfTurn(const RateOfTurnXYZ& rateOfTurn, char* output, size_t maxLen);
     static bool formatMagneticField(const MagneticFieldXYZ& magneticField, char* output, size_t maxLen);
+    static bool formatTemperature(const Temperature& temperature, char* output, size_t maxLen);
     
     // Helper functions for safe string operations
     static bool appendToBuffer(char* buffer, size_t maxLen, const char* str);
