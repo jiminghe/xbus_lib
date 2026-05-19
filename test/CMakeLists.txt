@@ -13,7 +13,8 @@ add_executable(xbus_parser_test
 )
 
 # Set C++ standard
-set_property(TARGET xbus_parser_test PROPERTY CXX_STANDARD 11)
+set_property(TARGET xbus_parser_test PROPERTY CXX_STANDARD 17)
+set_property(TARGET xbus_parser_test PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # Add test target
 enable_testing()

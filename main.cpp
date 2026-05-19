@@ -31,7 +31,7 @@ public:
         m_messageBuffer.reserve(256);
     }
     
-    bool initialize(const std::string& portName, DWORD baudRate = 115200) {
+    bool initialize(const std::string& portName, int baudRate = 115200) {
         if (!m_serial.open(portName, baudRate)) {
             std::cerr << "Failed to open serial port: " << m_serial.getLastError() << std::endl;
             return false;
@@ -262,10 +262,12 @@ int main() {
     std::cout << "==================" << std::endl;
     
     XbusMessageProcessor processor;
-    
-    // Initialize with COM9 at 115200 baud (8N1 is default)
-    if (!processor.initialize("COM9")) {
-        std::cerr << "Failed to initialize. Make sure COM9 is available and not in use." << std::endl;
+
+    // Initialize with /dev/ttyUSB0 at 115200 baud (8N1 is default).
+    const std::string port = "/dev/ttyUSB0";
+    if (!processor.initialize(port)) {
+        std::cerr << "Failed to initialize. Make sure " << port
+                  << " is available and you have permission (try the 'dialout' group)." << std::endl;
         std::cout << "Press Enter to exit...";
         std::cin.get();
         return 1;
