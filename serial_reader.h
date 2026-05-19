@@ -1,56 +1,40 @@
 #ifndef SERIAL_READER_H
 #define SERIAL_READER_H
 
-#include <string>
-#include <vector>
-#include <functional>
-#include <thread>
-#include <atomic>
-#include <cstdint>
-#include <cstddef>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
-class SerialReader {
-public:
-    SerialReader();
-    ~SerialReader();
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    // Open serial port with specified parameters.
-    // parity: 'N' (none), 'E' (even), 'O' (odd).
-    bool open(const std::string& portName, int baudRate = 115200,
-              int dataBits = 8, char parity = 'N', int stopBits = 1);
+typedef struct {
+    int  fd;
+    bool is_open;
+    char last_error[256];
+} SerialReader;
 
-    void close();
-    bool isOpen() const;
+void serial_reader_init(SerialReader* r);
 
-    bool write(const uint8_t* data, size_t length);
-    bool write(const std::vector<uint8_t>& data);
+/* Open `port_name` (e.g. "/dev/ttyUSB0"). parity: 'N'/'E'/'O'. */
+bool serial_reader_open(SerialReader* r, const char* port_name, int baud_rate,
+                        int data_bits, char parity, int stop_bits);
 
-    // Blocking read up to timeoutMs milliseconds.
-    int read(uint8_t* buffer, size_t bufferSize, int timeoutMs = 1000);
+void serial_reader_close(SerialReader* r);
+bool serial_reader_is_open(const SerialReader* r);
 
-    // Non-blocking read of whatever is currently buffered.
-    int readAvailable(uint8_t* buffer, size_t bufferSize);
+bool serial_reader_write(SerialReader* r, const uint8_t* data, size_t length);
 
-    void setDataCallback(std::function<void(const uint8_t*, size_t)> callback);
+/* Non-blocking read of whatever is currently buffered. Returns bytes read,
+   0 if nothing pending, -1 on error. */
+int  serial_reader_read_available(SerialReader* r, uint8_t* buffer, size_t buffer_size);
 
-    bool startAsyncReading();
-    void stopAsyncReading();
+bool        serial_reader_flush     (SerialReader* r);
+const char* serial_reader_last_error(const SerialReader* r);
 
-    std::string getLastError() const;
-    bool flushBuffers();
+#ifdef __cplusplus
+}
+#endif
 
-private:
-    int m_fd;
-    bool m_isOpen;
-    std::string m_lastError;
-
-    std::thread m_readThread;
-    std::atomic<bool> m_stopReading;
-    std::function<void(const uint8_t*, size_t)> m_dataCallback;
-
-    void readLoop();
-    void setLastError(const std::string& error);
-    bool setupSerialPort(int baudRate, int dataBits, char parity, int stopBits);
-};
-
-#endif // SERIAL_READER_H
+#endif /* SERIAL_READER_H */

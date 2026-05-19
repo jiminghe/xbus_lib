@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(XbusSerialReader CXX)
+project(XbusSerialReader C)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -14,8 +14,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/xbus)
 
 set(XBUS_SOURCES
-    xbus/xbus.cpp
-    xbus/xbus_parser.cpp
+    xbus/xbus.c
+    xbus/xbus_parser.c
 )
 
 set(XBUS_HEADERS
@@ -26,16 +26,21 @@ set(XBUS_HEADERS
 
 add_library(xbus STATIC ${XBUS_SOURCES} ${XBUS_HEADERS})
 
-set(SERIAL_SOURCES serial_reader.cpp)
+set(SERIAL_SOURCES serial_reader.c)
 set(SERIAL_HEADERS serial_reader.h)
 
 add_library(serial_reader STATIC ${SERIAL_SOURCES} ${SERIAL_HEADERS})
 
-# Async reader uses std::thread.
-find_package(Threads REQUIRED)
-target_link_libraries(serial_reader PUBLIC Threads::Threads)
+add_library(xsmath STATIC
+    xsmath/xsquaternion.c
+    xsmath/xseuler.c
+    xsmath/xsquaternion.h
+    xsmath/xseuler.h
+)
+target_include_directories(xsmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/xsmath)
+target_link_libraries(xsmath PUBLIC m)
 
-add_executable(xbus_reader main.cpp)
+add_executable(xbus_reader main.c xsdevice_def.c)
 target_link_libraries(xbus_reader xbus serial_reader)
 
 set_target_properties(xbus_reader PROPERTIES
