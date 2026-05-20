@@ -5,6 +5,10 @@
 
 #include <string.h>
 
+#ifdef DEBUG
+#include <stdio.h>
+#endif
+
 static void write_u16_be(uint8_t* dst, uint16_t v) {
     dst[0] = (uint8_t)((v >> 8) & 0xFF);
     dst[1] = (uint8_t)( v       & 0xFF);
@@ -31,7 +35,13 @@ static bool send_message(SerialReader* port, uint8_t mid,
         memcpy(xbus_get_pointer_to_payload(buf), payload, payload_len);
     }
     xbus_insert_checksum(buf);
-    return serial_reader_write(port, buf, (size_t)xbus_get_raw_length(buf));
+    size_t raw_len = (size_t)xbus_get_raw_length(buf);
+#ifdef DEBUG
+    fprintf(stderr, "[DBG TX] %zu bytes:", raw_len);
+    for (size_t i = 0; i < raw_len; i++) fprintf(stderr, " %02X", buf[i]);
+    fputc('\n', stderr);
+#endif
+    return serial_reader_write(port, buf, raw_len);
 }
 
 bool gotoConfig(SerialReader* port) {

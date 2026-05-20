@@ -10,6 +10,12 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+option(DEBUG_HEX "Print raw hex of sent/received xbus messages" OFF)
+if(DEBUG_HEX)
+    add_compile_definitions(DEBUG)
+    message(STATUS "DEBUG_HEX enabled — raw TX/RX hex will be printed to stderr")
+endif()
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/xbus)
 
@@ -40,9 +46,9 @@ add_library(xsmath STATIC
 target_include_directories(xsmath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/xsmath)
 target_link_libraries(xsmath PUBLIC m)
 
-add_executable(xbus_reader main.c xsdevice_def.c)
-target_link_libraries(xbus_reader xbus serial_reader)
+add_executable(mti_mount_calibrate main.c xsdevice_def.c)
+target_link_libraries(mti_mount_calibrate xbus serial_reader xsmath)
 
-set_target_properties(xbus_reader PROPERTIES
+set_target_properties(mti_mount_calibrate PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
